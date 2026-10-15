@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merge sort, one step at a time</title>
+<style>
+:root{--navy:#23376B;--teal:#1B7F75;--amber:#FCD76E;--paper:#F3F5F9;--slate:#6B7280;--ink:#1b2230;--line:#d5dae5}
+@media (prefers-color-scheme:dark){:root{--paper:#1c2233;--ink:#e8ebf3;--line:#38415a;--navy:#8fa6e8;--teal:#4fc3b4;--slate:#9aa3b5}body{background:#12161f}}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--ink);font:16px/1.5 "Palatino Linotype","Book Antiqua",Palatino,Georgia,serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 32px}
+h1{font-size:1.6rem;margin:0 0 2px;color:var(--navy)}
+.sub{margin:0 0 14px;color:var(--slate)}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+input[type=text]{flex:1 1 260px;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;background:transparent;color:inherit}
+button{padding:7px 12px;border:1px solid var(--navy);border-radius:6px;background:transparent;color:var(--navy);font:inherit;cursor:pointer}
+button.main{background:var(--navy);color:#fff}
+@media (prefers-color-scheme:dark){button.main{color:#12161f}}
+button:hover{filter:brightness(1.12)}
+.row2{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:12px}
+label{font-size:.9rem;color:var(--slate);display:flex;gap:6px;align-items:center}
+#scrub{flex:1 1 200px}
+#err{color:#b20000;font-size:.9rem;min-height:1.2em;margin:-6px 0 6px}
+.stage{display:flex;gap:6px;justify-content:center;padding:14px 8px 8px;background:var(--paper);border-radius:8px;min-height:250px}
+.col{flex:1 1 0;max-width:58px;text-align:center;font-variant-numeric:tabular-nums}
+.barwrap{height:132px;display:flex;align-items:flex-end}
+.bar{width:100%;border-radius:4px 4px 0 0;background:#fff;border:1.5px solid var(--navy);color:var(--ink);padding-top:2px;font-size:.9rem;transition:height .2s}
+.col.L .bar{background:#cfd8f0}.col.R .bar{background:#bfe3de;border-color:var(--teal)}
+.col.taken .bar{background:#d9dce3;border-color:#a8adb9;color:#8b909c}
+.col.cmp .bar{background:var(--amber);border-color:#a47a00;border-width:2.5px;color:#222}
+.col.done .bar{background:#9fd8cf;border-color:var(--teal)}
+.col.dim{opacity:.35}
+.idx{font-size:.72rem;color:var(--slate)}
+.ptr{height:20px;font-weight:700;color:var(--navy);font-size:.95rem}
+.ptr.k{color:var(--teal)}
+.buf{height:34px;border:1.5px dashed var(--line);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:.9rem}
+.buf.on{border:1.5px solid var(--teal);background:#bfe3de;color:#12332f}
+.buf.off{visibility:hidden}
+.info{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:14px}
+@media (max-width:700px){.info{grid-template-columns:1fr}}
+#msg{font-size:1.15rem;min-height:3.6em;margin:0 0 8px}
+.stats{color:var(--slate);font-size:.92rem;margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.85rem;color:var(--slate);margin:0 0 10px;padding:0;list-style:none}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;border:1.5px solid var(--navy);vertical-align:-1px;margin-right:5px}
+#log{margin:0;padding-left:1.1em;font-size:.85rem;color:var(--slate)}
+#log li:last-child{color:var(--ink);font-weight:600}
+.note{font-size:.85rem;color:var(--slate);margin-top:6px}
+@media (prefers-reduced-motion:reduce){.bar{transition:none}}
+</style>
+</head>
+<body>
+<main>
+<h1>Merge sort, one step at a time</h1>
+<p class="sub">Divide the array, then merge sorted halves with two pointers. Edit the array and watch every comparison.</p>
+
+<div class="controls">
+  <input id="inp" type="text" aria-label="Array values" value="38, 27, 43, 3, 9, 82, 10">
+  <button id="apply" class="main">Use this array</button>
+  <button data-p="ex">Example</button><button data-p="sorted">Sorted</button><button data-p="rev">Reversed</button><button data-p="rand">Random</button>
+</div>
+<div id="err" role="alert"></div>
+<div class="row2">
+  <button id="reset" title="Back to start">Reset</button>
+  <button id="back" title="Left arrow">Back</button>
+  <button id="play" class="main" title="Space">Play</button>
+  <button id="next" title="Right arrow">Next</button>
+  <label>Speed <input id="speed" type="range" min="1" max="10" value="5"></label>
+  <input id="scrub" type="range" min="0" max="0" value="0" aria-label="Step">
+</div>
+
+<div class="stage" id="stage" aria-label="Array and output buffer"></div>
+
+<div class="info">
+  <div>
+    <p id="msg" aria-live="polite"></p>
+    <p class="stats" id="stats"></p>
+    <p class="note">Keys: Left / Right = step, Space = play or pause. Top row is the array a[ ]; the boxes under it are the output buffer tmp[ ].</p>
+  </div>
+  <div>
+    <ul class="legend">
+      <li><i style="background:#cfd8f0"></i>left half</li>
+      <li><i style="background:#bfe3de;border-color:var(--teal)"></i>right half</li>
+      <li><i style="background:var(--amber);border-color:#a47a00"></i>compared</li>
+      <li><i style="background:#d9dce3;border-color:#a8adb9"></i>already taken</li>
+    </ul>
+    <ol id="log"></ol>
+  </div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let steps=[],idx=0,timer=null;
+
+function build(arr){
+  const a=arr.slice(),n=a.length,tmp=Array(n).fill(null),S=[];let cnt=0;
+  const push=o=>S.push(Object.assign({a:a.slice(),tmp:tmp.slice(),cnt,lo:-1,hi:-1,mid:-1,i:-1,j:-1,k:-1,ci:-1,cj:-1,mode:'idle'},o));
+  push({msg:`Start with ${n} numbers. Merge sort never compares anything while splitting, only while merging.`});
+  function ms(lo,hi){
+    if(lo>=hi)return;
+    const mid=lo+((hi-lo)>>1);
+    push({mode:'divide',lo,mid,hi,msg:`Divide a[${lo}..${hi}] into a[${lo}..${mid}] and a[${mid+1}..${hi}]. No comparisons yet.`});
+    ms(lo,mid);ms(mid+1,hi);merge(lo,mid,hi);
+  }
+  function merge(lo,mid,hi){
+    let i=lo,j=mid+1,k=lo;
+    tmp.fill(null);
+    push({mode:'merge',lo,mid,hi,i,j,k,ci:i,cj:j,msg:`Merge the sorted halves [${a.slice(lo,mid+1)}] and [${a.slice(mid+1,hi+1)}]. Pointers i and j start at the fronts.`});
+    while(i<=mid&&j<=hi){
+      cnt++;const x=a[i],y=a[j],ci=i,cj=j;let t;
+      if(x<=y){tmp[k]=x;i++;t=`Compare ${x} and ${y}: ${x} \u2264 ${y}, so take ${x} from the left half.`;}
+      else{tmp[k]=y;j++;t=`Compare ${x} and ${y}: ${x} > ${y}, so take ${y} from the right half.`;}
+      k++;
+      push({mode:'merge',lo,mid,hi,i,j,k,ci,cj,msg:`${t} (comparison #${cnt})`});
+    }
+    if(i<=mid){const r=a.slice(i,mid+1);while(i<=mid)tmp[k++]=a[i++];
+      push({mode:'merge',lo,mid,hi,i,j,k,msg:`The right half is empty, so copy the rest of the left half [${r}] without comparing.`});}
+    if(j<=hi){const r=a.slice(j,hi+1);while(j<=hi)tmp[k++]=a[j++];
+      push({mode:'merge',lo,mid,hi,i,j,k,msg:`The left half is empty, so copy the rest of the right half [${r}] without comparing.`});}
+    for(let x=lo;x<=hi;x++)a[x]=tmp[x];
+    push({mode:'back',lo,mid,hi,msg:`Copy the merged run back: a[${lo}..${hi}] = [${a.slice(lo,hi+1)}].`});
+    tmp.fill(null);
+  }
+  ms(0,n-1);
+  const kk=Math.ceil(Math.log2(n)),W=n*kk-2**kk+1;
+  push({mode:'done',msg:`Sorted with ${cnt} comparisons. The worst case for n = ${n} is ${W}, and merge sort always takes \u0398(n log n) time.`});
+  return S;
+}
+
+function render(){
+  const s=steps[idx],mx=Math.max(...s.a,1);
+  $('stage').innerHTML=s.a.map((v,x)=>{
+    let c='';const inR=s.lo>=0&&x>=s.lo&&x<=s.hi;
+    if(s.mode==='done')c='done';
+    else if(s.lo>=0){
+      if(!inR)c='dim';
+      else if(s.mode==='back')c='done';
+      else{c=x<=s.mid?'L':'R';
+        if(s.mode==='merge'){
+          if((x<=s.mid&&x<s.i)||(x>s.mid&&x<s.j))c+=' taken';
+          if(x===s.ci||x===s.cj)c+=' cmp';}}}
+    const ptr=s.mode==='merge'?(x===s.i&&s.i<=s.mid?'i':(x===s.j&&s.j<=s.hi?'j':'')):'';
+    const show=inR&&(s.mode==='merge'||s.mode==='back'),bv=s.tmp[x];
+    const buf=show?`<div class="buf ${bv!==null?'on':''}">${bv!==null?bv:''}</div>`:'<div class="buf off"></div>';
+    const kk=s.mode==='merge'&&x===s.k&&s.k<=s.hi?'k':'';
+    return `<div class="col ${c}"><div class="barwrap"><div class="bar" style="height:${18+110*v/mx}px">${v}</div></div><div class="idx">${x}</div><div class="ptr">${ptr}</div>${buf}<div class="ptr k">${kk}</div></div>`;
+  }).join('');
+  $('msg').textContent=s.msg;
+  $('stats').textContent=`Step ${idx} of ${steps.length-1}  \u00b7  comparisons so far: ${s.cnt}`;
+  $('log').innerHTML=steps.slice(Math.max(0,idx-3),idx+1).map(t=>`<li>${t.msg}</li>`).join('');
+  $('scrub').max=steps.length-1;$('scrub').value=idx;
+  $('back').disabled=$('reset').disabled=idx===0;$('next').disabled=idx===steps.length-1;
+}
+function goTo(i){idx=Math.max(0,Math.min(steps.length-1,i));render();if(idx===steps.length-1)pause();}
+function pause(){clearInterval(timer);timer=null;$('play').textContent='Play';}
+function play(){if(idx===steps.length-1)idx=0;$('play').textContent='Pause';
+  timer=setInterval(()=>goTo(idx+1),1700-150*$('speed').value);}
+function load(arr){pause();steps=build(arr);idx=0;$('inp').value=arr.join(', ');$('err').textContent='';render();}
+function apply(){
+  const v=$('inp').value.split(/[\s,]+/).filter(Boolean).map(Number);
+  if(v.length<2||v.length>16||v.some(x=>!Number.isInteger(x)||x<0||x>999)){
+    $('err').textContent='Enter 2 to 16 whole numbers between 0 and 999, separated by commas.';return;}
+  load(v);
+}
+$('apply').onclick=apply;
+$('inp').onkeydown=e=>{if(e.key==='Enter')apply();};
+document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{
+  const p=b.dataset.p,n=8;
+  load(p==='ex'?[38,27,43,3,9,82,10]:p==='sorted'?[5,12,18,25,31,44,60,77]:p==='rev'?[77,60,44,31,25,18,12,5]:Array.from({length:n},()=>1+Math.floor(Math.random()*99)));});
+$('reset').onclick=()=>{pause();goTo(0);};
+$('back').onclick=()=>{pause();goTo(idx-1);};
+$('next').onclick=()=>{pause();goTo(idx+1);};
+$('play').onclick=()=>timer?pause():play();
+$('scrub').oninput=e=>{pause();goTo(+e.target.value);};
+$('speed').oninput=()=>{if(timer){pause();play();}};
+document.onkeydown=e=>{
+  if(e.target.tagName==='INPUT'&&e.target.type==='text')return;
+  if(e.key==='ArrowRight'){pause();goTo(idx+1);}
+  else if(e.key==='ArrowLeft'){pause();goTo(idx-1);}
+  else if(e.key===' '&&e.target.tagName!=='BUTTON'){e.preventDefault();timer?pause():play();}
+};
+load([38,27,43,3,9,82,10]);
+</script>
+</body>
+</html>
